@@ -286,7 +286,7 @@ void setup() {
   BLEDevice::init("ESP32-ELM327-Emu");
 
   // 3. Setup BLE Security
-  esp_ble_gap_register_callback(ble_gap_event_cb);
+  BLEDevice::setCustomGapHandler(ble_gap_event_cb);
   configureBLESecurity();
 
   // 4. Create BLE server
