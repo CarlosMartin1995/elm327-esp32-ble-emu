@@ -13,15 +13,15 @@
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEServer.h>
-#include <BLESecurity.h>
 #include <BLE2902.h>
+#include <esp_gap_ble_api.h>
 
 // ---------- Wi-Fi Credentials ------------
 const char* WIFI_SSID     = "YOUR_SSID"; // Replace with your Wi-Fi SSID
 const char* WIFI_PASSWORD = "YOUR_PASSWORD"; // Replace with your Wi-Fi password
 
 // ---------- ELM Emulator TCP -------------
-const char* ELM_HOST = "YOUR_ELM_HOST"; // Replace with your ELM emulator IP (your local machine)
+const char* ELM_HOST = "IP_ADDRESS_MACHINE"; // Your Mac's local IP
 const uint16_t ELM_PORT = 35000;
 
 // ---------- BLE ELM327 Service/Chars -----
@@ -158,40 +158,38 @@ class MyServerCallbacks : public BLEServerCallbacks {
   }
 };
 
-// Handle BLE Security (passkey, bonding)
-class MySecurityCallbacks : public BLESecurityCallbacks {
-public:
-  uint32_t onPassKeyRequest() {
-    Serial.println("[BLE] Passkey requested");
-    return PASSKEY;
+// GAP event handler for BLE security events
+void ble_gap_event_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
+  switch (event) {
+    case ESP_GAP_BLE_PASSKEY_REQ_EVT:
+      Serial.println("[BLE] Passkey requested");
+      esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, PASSKEY);
+      break;
+    case ESP_GAP_BLE_PASSKEY_NOTIF_EVT:
+      Serial.print("[BLE] Passkey for pairing: ");
+      Serial.println(param->ble_security.key_notif.passkey);
+      break;
+    case ESP_GAP_BLE_NC_REQ_EVT:
+      Serial.print("[BLE] Confirm passkey: ");
+      Serial.println(param->ble_security.key_notif.passkey);
+      esp_ble_confirm_reply(param->ble_security.ble_req.bd_addr, true);
+      break;
+    case ESP_GAP_BLE_SEC_REQ_EVT:
+      Serial.println("[BLE] Security requested");
+      esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+      break;
+    case ESP_GAP_BLE_AUTH_CMPL_EVT:
+      if (param->ble_security.auth_cmpl.success) {
+        Serial.println("[BLE] Authentication successful! Connection is now secured.");
+      } else {
+        Serial.print("[BLE] Authentication failed. Reason: ");
+        Serial.println(param->ble_security.auth_cmpl.fail_reason);
+      }
+      break;
+    default:
+      break;
   }
-
-  void onPassKeyNotify(uint32_t pass_key) {
-    Serial.print("[BLE] Passkey for pairing: ");
-    Serial.println(pass_key);
-  }
-
-  bool onConfirmPIN(uint32_t pass_key) {
-    Serial.print("[BLE] Confirm passkey: ");
-    Serial.println(pass_key);
-    // Return true to accept. 
-    return true;
-  }
-
-  bool onSecurityRequest() {
-    Serial.println("[BLE] Security requested");
-    return true; // Accept connection attempts that require security
-  }
-
-  void onAuthenticationComplete(esp_ble_auth_cmpl_t auth_cmpl) {
-    if (auth_cmpl.success) {
-      Serial.println("[BLE] Authentication successful! Connection is now secured.");
-    } else {
-      Serial.print("[BLE] Authentication failed. Reason: ");
-      Serial.println(auth_cmpl.fail_reason);
-    }
-  }
-};
+}
 
 String removeCommandEcho(const String& response, const String& cmd) {
   // Copy for editing
@@ -286,10 +284,9 @@ void setup() {
   
   // 2. Init BLE
   BLEDevice::init("ESP32-ELM327-Emu");
-  BLEDevice::setSecurityCallbacks(new MySecurityCallbacks());
-  BLEDevice::setEncryptionLevel(ESP_BLE_SEC_ENCRYPT);
 
   // 3. Setup BLE Security
+  esp_ble_gap_register_callback(ble_gap_event_cb);
   configureBLESecurity();
 
   // 4. Create BLE server
