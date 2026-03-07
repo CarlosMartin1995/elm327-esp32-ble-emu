@@ -36,6 +36,8 @@ BLECharacteristic *pNotifyChar = nullptr;
 
 // Track connection and notification status
 bool deviceConnected = false;
+bool needsAdvertisingRestart = false;
+BLEServer *pServer = nullptr;
 
 // We'll use a global WiFiClient for the ELM emulator
 WiFiClient elmClient;
@@ -153,8 +155,9 @@ class MyServerCallbacks : public BLEServerCallbacks {
   void onDisconnect(BLEServer* pServer) override {
     deviceConnected = false;
     Serial.println("[BLE] Central disconnected");
-    // Restart advertising so another device can connect
-    pServer->startAdvertising();
+    // Defer advertising restart to loop() — calling startAdvertising() from
+    // this callback context crashes on ESP32 Arduino Core 3.x
+    needsAdvertisingRestart = true;
   }
 };
 
@@ -290,7 +293,7 @@ void setup() {
   configureBLESecurity();
 
   // 4. Create BLE server
-  BLEServer *pServer = BLEDevice::createServer();
+  pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
   // 5. Create GATT service and characteristics
@@ -319,11 +322,23 @@ void setup() {
   pAdvertising->setScanResponse(true);
   pServer->startAdvertising();
 
-  Serial.println("BLE ELM327 Emulator is now advertising (passkey = 123456)...");
+  // Set preferred connection parameters for faster disconnect detection.
+  // min_int=0x10 (20ms), max_int=0x20 (40ms), latency=0, supervision_timeout=200 (2s)
+  // With timeout=2s the ESP32 detects a phone disconnect in ~2s instead of ~20-30s.
+  esp_ble_gap_set_prefer_conn_params(
+    (esp_bd_addr_t){0, 0, 0, 0, 0, 0},  // applies to all connections
+    0x10, 0x20, 0, 200
+  );
+
+  Serial.println(“BLE ELM327 Emulator is now advertising (passkey = 123456)...”);
 }
 
 void loop() {
-  // For a real “car simulator,” you could periodically push new data,
-  // or handle advanced commands. For now, we only respond to write requests.
-  delay(1000);
+  if (needsAdvertisingRestart) {
+    needsAdvertisingRestart = false;
+    delay(100); // Brief settle time
+    pServer->startAdvertising();
+    Serial.println(“[BLE] Advertising restarted (deferred)”);
+  }
+  delay(100);
 }
