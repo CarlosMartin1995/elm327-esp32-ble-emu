@@ -1,0 +1,31 @@
+/**
+ * config.h.example - Configuration template for ESP32 BLE ELM327 Emulator
+ *
+ * Copy this file to config.h and fill in your values:
+ *   cp config.h.example config.h
+ *
+ * config.h is gitignored — your credentials stay local.
+ */
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// ---------- Wi-Fi Credentials ------------
+#define WIFI_SSID     "YOUR_SSID"
+#define WIFI_PASSWORD "YOUR_PASSWORD"
+
+// ---------- ELM Emulator TCP -------------
+// IP of the machine running Ircama ELM327 emulator
+#define ELM_HOST "192.168.1.100"
+#define ELM_PORT 35000
+
+// ---------- BLE Security -----------------
+#define BLE_PASSKEY 123456  // 6-digit passkey for BLE pairing
+
+// ---------- BLE Device Name --------------
+#define BLE_DEVICE_NAME "ESP32-ELM327-Emu"
+
+// ---------- BT Classic Device Name -------
+#define BT_CLASSIC_NAME "OBDII"
+
+#endif // CONFIG_H
